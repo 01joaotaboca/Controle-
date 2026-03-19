@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Agro na Palma da Mão - Pro</title>
+    
+    <meta name="theme-color" content="#2e7d32">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2e7d32;
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --danger: #c62828;
+            --edit: #ffa000;
+            --whatsapp: #25d366;
+            --pdf: #e53935;
+            --save: #1976d2;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            margin: 0; padding: 10px;
+            display: flex; flex-direction: column; align-items: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container { width: 100%; max-width: 480px; }
+
+        .header-title {
+            color: var(--primary);
+            text-align: center;
+            font-size: 1.6rem;
+            margin: 15px 0;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 18px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+
+        h3 { color: var(--primary); text-align: center; margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85rem; color: #444; }
+
+        input, select {
+            width: 100%; padding: 14px; border: 1.5px solid #ddd; border-radius: 12px;
+            box-sizing: border-box; font-size: 16px; outline: none; transition: 0.3s;
+        }
+
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1); }
+
+        .qty-row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; }
+        .loc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        .btn-principal {
+            width: 100%; padding: 16px; background-color: var(--primary);
+            color: white; border: none; border-radius: 12px; font-size: 1rem;
+            font-weight: bold; cursor: pointer; transition: 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-principal:active { transform: scale(0.98); }
+        .btn-principal.editando { background-color: var(--edit); }
+
+        .actions-grid {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 20px 0;
+        }
+
+        .btn-action {
+            padding: 12px 5px; border: none; border-radius: 10px; color: white;
+            font-weight: bold; font-size: 0.75rem; cursor: pointer; text-transform: uppercase;
+        }
+
+        .btn-whatsapp { background-color: var(--whatsapp); }
+        .btn-pdf { background-color: var(--pdf); }
+        .btn-save { background-color: var(--save); }
+        
+        .table-container { overflow-x: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th, td { text-align: left; padding: 12px 6px; border-bottom: 1px solid #f0f0f0; }
+        th { background: #fafafa; color: #777; font-size: 0.7rem; text-transform: uppercase; }
+
+        .btn-tabela {
+            border: none; padding: 8px; border-radius: 8px; color: white;
+            font-size: 0.8rem; cursor: pointer; margin-right: 4px;
+        }
+        .btn-edit { background-color: var(--edit); }
+        .btn-del { background-color: var(--danger); }
+
+        .footer { text-align: center; margin: 30px 0; font-size: 0.8rem; color: #888; }
+        .dev-info { font-weight: bold; color: var(--primary); }
+
+        .btn-limpar {
+            background: #fff; color: var(--danger); border: 1px solid var(--danger);
+            padding: 5px 10px; border-radius: 6px; font-size: 0.65rem; float: right; cursor: pointer;
+        }
+
+        #offline-badge {
+            display: none; background: #333; color: white; padding: 5px 10px;
+            border-radius: 20px; font-size: 0.7rem; position: fixed; top: 10px; right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="offline-badge">Modo Offline</div>
+
+<div class="container">
+    <div class="header-title">Agro na Palma da Mão</div>
+    
+    <div class="card">
+        <h3 id="tituloForm">📝 Novo Registro de Saída</h3>
+        <form id="formSaida">
+            <input type="hidden" id="editId">
+            
+            <div class="input-group">
+                <label>Produto / Insumo</label>
+                <input type="text" id="produto" placeholder="Ex: Ureia, Glifosato, NPK..." required>
+            </div>
+
+            <div class="qty-row">
+                <div class="input-group">
+                    <label>Quantidade</label>
+                    <input type="number" id="quantidade" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="input-group">
+                    <label>Unidade</label>
+                    <select id="unidade">
+                        <option value="Bag">Bag (1000kg)</option>
+                        <option value="L">Litros (L)</option>
+                        <option value="Kg">Quilos (Kg)</option>
+                        <option value="Saco">Sacos</option>
+                        <option value="Un">Unidades</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="loc-row">
+                <div class="input-group">
+                    <label>Origem (Saindo de:)</label>
+                    <input type="text" id="origem" placeholder="Ex: Galpão A" required>
+                </div>
+                <div class="input-group">
+                    <label>Destino (Para:)</label>
+                    <input type="text" id="destino" placeholder="Ex: Talhão Norte" required>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Data da Saída</label>
+                <input type="date" id="dataSaida" required>
+            </div>
+
+            <button type="submit" id="btnSubmit" class="btn-principal">SALVAR REGISTRO</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <button class="btn-limpar" onclick="limparHistorico()">Limpar Base</button>
+        <h3>📊 Relatórios & Histórico</h3>
+        
+        <div class="actions-grid">
+            <button class="btn-action btn-whatsapp" onclick="exportarZap()">WhatsApp</button>
+            <button class="btn-action btn-pdf" onclick="exportarPDF()">PDF</button>
+            <button class="btn-action btn-save" onclick="salvarCSV()">Planilha</button>
+        </div>
+
+        <div class="table-container">
+            <table id="tabelaSaidas">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Produto / Trajeto</th>
+                        <th>Qtd</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="footer">
+        Versão 2.1 PWA • Criado por <span class="dev-info">João Divino Barbosa</span>
+    </div>
+</div>
+
+<script>
+    const formSaida = document.getElementById('formSaida');
+    const tabelaSaidas = document.querySelector('#tabelaSaidas tbody');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const tituloForm = document.getElementById('tituloForm');
+    const editIdInput = document.getElementById('editId');
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('dataSaida').valueAsDate = new Date();
+        renderizarTabela();
+        
+        window.addEventListener('offline', () => document.getElementById('offline-badge').style.display = 'block');
+        window.addEventListener('online', () => document.getElementById('offline-badge').style.display = 'none');
+    });
+
+    formSaida.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const registro = {
+            id: editIdInput.value ? parseInt(editIdInput.value) : Date.now(),
+            produto: document.getElementById('produto').value.trim(),
+            quantidade: document.getElementById('quantidade').value,
+            unidade: document.getElementById('unidade').value,
+            origem: document.getElementById('origem').value.trim(),
+            destino: document.getElementById('destino').value.trim(),
+            data: document.getElementById('dataSaida').value
+        };
+
+        let lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+
+        if (editIdInput.value) {
+            lista = lista.map(item => item.id === registro.id ? registro : item);
+            btnSubmit.classList.remove('editando');
+            btnSubmit.innerText = "SALVAR REGISTRO";
+            tituloForm.innerText = "📝 Novo Registro de Saída";
+            editIdInput.value = "";
+        } else {
+            lista.unshift(registro);
+        }
+
+        localStorage.setItem('agro_saidas', JSON.stringify(lista));
+        formSaida.reset();
+        document.getElementById('dataSaida').valueAsDate = new Date();
+        renderizarTabela();
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    });
+
+    function renderizarTabela() {
+        const lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+        tabelaSaidas.innerHTML = lista.map(item => `
+            <tr>
+                <td>${item.data.split('-').reverse().slice(0,2).join('/')}</td>
+                <td><strong>${item.produto}</strong><br><small>📤 ${item.origem} ➔ 📥 ${item.destino}</small></td>
+                <td>${item.quantidade}<br><small>${item.unidade}</small></td>
+                <td style="white-space: nowrap">
+                    <button class="btn-tabela btn-edit" onclick="editarItem(${item.id})">✎</button>
+                    <button class="btn-tabela btn-del" onclick="excluirItem(${item.id})">✕</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function editarItem(id) {
+        const lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+        const item = lista.find(i => i.id === id);
+        
+        if (item) {
+            document.getElementById('produto').value = item.produto;
+            document.getElementById('quantidade').value = item.quantidade;
+            document.getElementById('unidade').value = item.unidade;
+            document.getElementById('origem').value = item.origem;
+            document.getElementById('destino').value = item.destino;
+            document.getElementById('dataSaida').value = item.data;
+            editIdInput.value = item.id;
+
+            btnSubmit.classList.add('editando');
+            btnSubmit.innerText = "ATUALIZAR DADOS";
+            tituloForm.innerText = "⚠️ Corrigindo Registro";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    function excluirItem(id) {
+        if(confirm("Eliminar este registo permanentemente?")) {
+            let lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+            lista = lista.filter(i => i.id !== id);
+            localStorage.setItem('agro_saidas', JSON.stringify(lista));
+            renderizarTabela();
+        }
+    }
+
+    function exportarZap() {
+        const lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+        if(lista.length === 0) return alert("Sem dados!");
+        let msg = "*RELATÓRIO AGRO*\n\n";
+        lista.forEach(i => {
+            msg += `📅 ${i.data.split('-').reverse().join('/')}\n📦 *${i.produto}*: ${i.quantidade} ${i.unidade}\n📤 Origem: ${i.origem}\n📥 Destino: ${i.destino}\n---\n`;
+        });
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+    }
+
+    function exportarPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+        doc.setFontSize(18);
+        doc.setTextColor(46, 125, 50);
+        doc.text("Agro na Palma da Mão - Relatório", 14, 20);
+        
+        const rows = lista.map(i => [i.data.split('-').reverse().join('/'), i.produto, i.quantidade + ' ' + i.unidade, i.origem, i.destino]);
+        doc.autoTable({ 
+            head: [['Data', 'Insumo', 'Quantidade', 'Origem', 'Destino']], 
+            body: rows, 
+            startY: 30,
+            theme: 'grid',
+            headStyles: { fillColor: [46, 125, 50] }
+        });
+        doc.save(`agro_relatorio_${Date.now()}.pdf`);
+    }
+
+    function salvarCSV() {
+        const lista = JSON.parse(localStorage.getItem('agro_saidas')) || [];
+        let csv = '\ufeffData,Produto,Quantidade,Unidade,Origem,Destino\n';
+        lista.forEach(i => csv += `${i.data},${i.produto},${i.quantidade},${i.unidade},${i.origem},${i.destino}\n`);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'saidas_fazenda.csv'; a.click();
+    }
+
+    function limparHistorico() {
+        if(confirm("AVISO: Isto apagará todos os dados do telemóvel. Continuar?")) {
+            localStorage.removeItem('agro_saidas');
+            renderizarTabela();
+        }
+    }
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                console.log('SW ativo!');
+            }).catch(err => console.log('Erro SW:', err));
+        });
+    }
+</script>
+
+</body>
+</html>
