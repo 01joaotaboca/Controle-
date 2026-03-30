@@ -3,6 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Agro Pro - Conectado</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        :root { --primary: #2e7d32; --bg: #f0f2f5; --card: #ffffff; --danger: #c62828; --edit: #ffa000; --whatsapp: #25d366; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 480px; }
+        .header-title { color: var(--primary); text-align: center; font-size: 1.6rem; margin: 15px 0; font-weight: 800; text-transform: uppercase; }
+        .card { background: var(--card); padding: 20px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h3 { color: var(--primary); text-align: center; margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85rem; color: #444; }
+        input, select { width: 100%; padding: 14px; border: 1.5px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; }
+        .qty-row, .loc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn-principal { width: 100%; padding: 16px; background-color: var(--primary); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-principal:active { transform: scale(0.98); }
+        .btn-principal.editando { background-color: var(--edit); }
+        .actions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 20px 0; }
+        .btn-action { padding: 12px 5px; border: none; border-radius: 10px; color: white; font-weight: bold; font-size: 0.75rem; cursor: pointer; }
+        .btn-whatsapp { background-color: var(--whatsapp); }
+        .btn-pdf { background-color: #e53935; }
+        .btn-refresh { background-color: #1976d2; }
+        .table-container { overflow-x: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th, td { text-align: left; padding: 12px 6px; border-bottom: 1px solid #f0f0f0; }
+        .btn-tabela { border: none; padding: 8px; border-radius: 8px; color: white; cursor: pointer; margin-right: 4px; }
+        .btn-edit { background-color: var(--edit); }
+        .btn-del { background-color: var(--danger); }
+        .status-sync { text-align: center; font-size: 0.7rem; color: #888; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-title">Agro na Palma da Mão</div>
+    
+    <div class="card">
+        <h3 id="tituloForm">📝 Novo Registro de Saída</h3>
+        <form id="formSaida">
+            <input type="hidden" id="editId">
+            <div class="input-group">
+                <label>Produto / Insumo</label>
+                <input type="text" id="produto" placeholder="Ex: Ureia" required>
+            </div>
+            <div class="qty-row">
+                <div class="input-group">
+                    <label>Quantidade</label>
+                    <input type="number" id="quantidade" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Unidade</label>
+                    <select id="unidade">
+                        <option value="Bag">Bag</option>
+                        <option value="L">Litros</option>
+                        <option value="Kg">Quilos</option>
+                        <option value="Saco">Sacos</option>
+                    </select>
+                </div>
+            </div>
+            <div class="loc-row">
+                <div class="input-group"><label>Origem</label><input type="text" id="origem" required></div>
+                <div class="input-group"><label>Destino</label><input type="text" id="destino" required></div>
+            </div>
+            <div class="input-group">
+                <label>Data da Saída</label>
+                <input type="date" id="dataSaida" required>
+            </div>
+            <button type="submit" id="btnSubmit" class="btn-principal">SALVAR NO SUPABASE</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>📊 Histórico na Nuvem</h3>
+        <div class="status-sync" id="statusSync">Sincronizado com Sucesso</div>
+        <div class="actions-grid">
+            <button class="btn-action btn-whatsapp" onclick="exportarZap()">WhatsApp</button>
+            <button class="btn-action btn-pdf" onclick="exportarPDF()">PDF</button>
+            <button class="btn-action btn-refresh" onclick="carregarDados()">Atualizar</button>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr><th>Data</th><th>Produto/Trajeto</th><th>Qtd</th><th>Ações</th></tr>
+                </thead>
+                <tbody id="tabelaCorpo"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Conexão Supabase
+    const SB_URL = "https://jdbmrmgkdysrpylmqbgl.supabase.co";
+    const SB_KEY = "Sb_publishable_kMzhA_co1ZiiFedRXwxFxg_bBEcGHdg";
+    const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+
+    const form = document.getElementById('formSaida');
+    const tabelaCorpo = document.getElementById('tabelaCorpo');
+    const btnSubmit = document.getElementById('btnSubmit');
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('dataSaida').valueAsDate = new Date();
+        carregarDados();
+    });
+
+    // Função para buscar dados
+    async function carregarDados() {
+        document.getElementById('statusSync').innerText = "Carregando...";
+        const { data, error } = await supabaseClient
+            .from('saidas_estoque')
+            .select('*')
+            .order('data_saida', { ascending: false });
+
+        if (error) {
+            alert("Erro ao carregar banco: " + error.message);
+            return;
+        }
+
+        tabelaCorpo.innerHTML = data.map(item => `
+            <tr>
+                <td>${item.data_saida.split('-').reverse().slice(0,2).join('/')}</td>
+                <td><strong>${item.produto}</strong><br><small>${item.origem} ➔ ${item.destino}</small></td>
+                <td>${item.quantidade}<br><small>${item.unidade}</small></td>
+                <td style="white-space: nowrap">
+                    <button class="btn-tabela btn-edit" onclick="editarRegistro('${item.id}')">✎</button>
+                    <button class="btn-tabela btn-del" onclick="excluirRegistro('${item.id}')">✕</button>
+                </td>
+            </tr>
+        `).join('');
+        document.getElementById('statusSync').innerText = "Nuvem Atualizada em: " + new Date().toLocaleTimeString();
+    }
+
+    // Salvar ou Atualizar
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const registro = {
+            produto: document.getElementById('produto').value,
+            quantidade: parseFloat(document.getElementById('quantidade').value),
+            unidade: document.getElementById('unidade').value,
+            origem: document.getElementById('origem').value,
+            destino: document.getElementById('destino').value,
+            data_saida: document.getElementById('dataSaida').value
+        };
+
+        if (id) {
+            await supabaseClient.from('saidas_estoque').update(registro).eq('id', id);
+        } else {
+            await supabaseClient.from('saidas_estoque').insert([registro]);
+        }
+
+        form.reset();
+        document.getElementById('editId').value = "";
+        btnSubmit.innerText = "SALVAR NO SUPABASE";
+        btnSubmit.classList.remove('editando');
+        document.getElementById('dataSaida').valueAsDate = new Date();
+        carregarDados();
+    });
+
+    async function excluirRegistro(id) {
+        if (confirm("Excluir registro permanentemente do banco?")) {
+            await supabaseClient.from('saidas_estoque').delete().eq('id', id);
+            carregarDados();
+        }
+    }
+
+    async function editarRegistro(id) {
+        const { data } = await supabaseClient.from('saidas_estoque').select('*').eq('id', id).single();
+        if (data) {
+            document.getElementById('produto').value = data.produto;
+            document.getElementById('quantidade').value = data.quantidade;
+            document.getElementById('unidade').value = data.unidade;
+            document.getElementById('origem').value = data.origem;
+            document.getElementById('destino').value = data.destino;
+            document.getElementById('dataSaida').value = data.data_saida;
+            document.getElementById('editId').value = data.id;
+            btnSubmit.innerText = "ATUALIZAR DADOS";
+            btnSubmit.classList.add('editando');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    // WhatsApp
+    async function exportarZap() {
+        const { data } = await supabaseClient.from('saidas_estoque').select('*');
+        if(!data.length) return alert("Banco vazio!");
+        let msg = "*RELATÓRIO AGRO PRO*\n\n";
+        data.forEach(i => msg += `📅 ${i.data_saida}: ${i.produto} (${i.quantidade}${i.unidade})\n`);
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+    }
+
+    // PDF
+    async function exportarPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const { data } = await supabaseClient.from('saidas_estoque').select('*');
+        doc.text("Relatorio de Saidas - Agro Pro", 14, 20);
+        const rows = data.map(i => [i.data_saida, i.produto, i.quantidade + ' ' + i.unidade, i.origem, i.destino]);
+        doc.autoTable({ head: [['Data', 'Produto', 'Qtd', 'Origem', 'Destino']], body: rows, startY: 30 });
+        doc.save('agro_supabase.pdf');
+    }
+</script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Agro na Palma da Mão - Pro</title>
     
     <meta name="theme-color" content="#2e7d32">
