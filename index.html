@@ -21,7 +21,6 @@
         input, select { width: 100%; padding: 14px; border: 1.5px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; }
         .qty-row, .loc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .btn-principal { width: 100%; padding: 16px; background-color: var(--primary); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-principal:active { transform: scale(0.98); }
         .btn-principal.editando { background-color: var(--edit); }
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 20px 0; }
         .btn-action { padding: 12px 5px; border: none; border-radius: 10px; color: white; font-weight: bold; font-size: 0.75rem; cursor: pointer; }
@@ -34,7 +33,7 @@
         .btn-tabela { border: none; padding: 8px; border-radius: 8px; color: white; cursor: pointer; margin-right: 4px; }
         .btn-edit { background-color: var(--edit); }
         .btn-del { background-color: var(--danger); }
-        .status-sync { text-align: center; font-size: 0.7rem; color: #888; margin-bottom: 5px; font-weight: bold; }
+        .status-sync { text-align: center; font-size: 0.75rem; color: #888; margin-bottom: 5px; font-weight: bold; }
         .footer-sig { text-align: center; font-size: 0.75rem; color: #666; margin-top: 20px; font-weight: bold; }
     </style>
 </head>
@@ -80,7 +79,7 @@
 
     <div class="card">
         <h3>📊 Histórico na Nuvem</h3>
-        <div class="status-sync" id="statusSync">Verificando conexão...</div>
+        <div class="status-sync" id="statusSync">Aguardando...</div>
         <div class="actions-grid">
             <button class="btn-action btn-whatsapp" onclick="exportarZap()">WhatsApp</button>
             <button class="btn-action btn-pdf" onclick="exportarPDF()">PDF</button>
@@ -89,37 +88,34 @@
         <div class="table-container">
             <table>
                 <thead>
-                    <tr><th>Data</th><th>Produto/Trajeto</th><th>Qtd</th><th>Ações</th></tr>
+                    <tr><th>Data</th><th>Produto</th><th>Qtd</th><th>Ações</th></tr>
                 </thead>
                 <tbody id="tabelaCorpo"></tbody>
             </table>
         </div>
     </div>
-    
     <div class="footer-sig">Resp. Técnico: João Divino Barbosa</div>
 </div>
 
 <script>
-    // Configurações do Supabase extraídas do seu Token
+    // CONFIGURAÇÃO CORRIGIDA (SEM O 'G' EXTRA)
     const SB_URL = "https://jdbmrmkdysrpylmqbgl.supabase.co";
     const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkYm1ybWdrZHlzcnB5bG1xYmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MDk3MjksImV4cCI6MjA5MDQ4NTcyOX0.Td-vOPw_rAA2YFi1hU0FjleX12H66TYAr7DbiLS3UtI";
+    
     const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
-
     const form = document.getElementById('formSaida');
     const tabelaCorpo = document.getElementById('tabelaCorpo');
-    const btnSubmit = document.getElementById('btnSubmit');
+    const statusSync = document.getElementById('statusSync');
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dataSaida').valueAsDate = new Date();
         carregarDados();
     });
 
-    // Buscar dados do Supabase
     async function carregarDados() {
-        const status = document.getElementById('statusSync');
-        status.innerText = "⏳ Carregando...";
-        status.style.color = "#ffa000";
-
+        statusSync.innerText = "⏳ Sincronizando...";
+        statusSync.style.color = "orange";
+        
         try {
             const { data, error } = await supabaseClient
                 .from('saidas_estoque')
@@ -140,16 +136,14 @@
                 </tr>
             `).join('');
             
-            status.innerText = "✅ Nuvem Sincronizada: " + new Date().toLocaleTimeString();
-            status.style.color = "#2e7d32";
+            statusSync.innerText = "✅ Nuvem Atualizada";
+            statusSync.style.color = "green";
         } catch (err) {
-            status.innerText = "❌ Erro de Conexão";
-            status.style.color = "var(--danger)";
-            console.error(err);
+            statusSync.innerText = "❌ Erro: " + err.message;
+            statusSync.style.color = "red";
         }
     }
 
-    // Salvar ou Atualizar no Banco
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('editId').value;
@@ -164,17 +158,13 @@
 
         try {
             if (id) {
-                const { error } = await supabaseClient.from('saidas_estoque').update(registro).eq('id', id);
-                if (error) throw error;
+                await supabaseClient.from('saidas_estoque').update(registro).eq('id', id);
             } else {
-                const { error } = await supabaseClient.from('saidas_estoque').insert([registro]);
-                if (error) throw error;
+                await supabaseClient.from('saidas_estoque').insert([registro]);
             }
-
             form.reset();
             document.getElementById('editId').value = "";
-            btnSubmit.innerText = "SALVAR NO SUPABASE";
-            btnSubmit.classList.remove('editando');
+            document.getElementById('btnSubmit').innerText = "SALVAR NO SUPABASE";
             document.getElementById('dataSaida').valueAsDate = new Date();
             carregarDados();
         } catch (err) {
@@ -183,19 +173,14 @@
     });
 
     async function excluirRegistro(id) {
-        if (confirm("Deseja apagar este registro do banco de dados?")) {
-            try {
-                const { error } = await supabaseClient.from('saidas_estoque').delete().eq('id', id);
-                if (error) throw error;
-                carregarDados();
-            } catch (err) {
-                alert("Erro ao excluir: " + err.message);
-            }
+        if (confirm("Excluir permanentemente?")) {
+            await supabaseClient.from('saidas_estoque').delete().eq('id', id);
+            carregarDados();
         }
     }
 
     async function editarRegistro(id) {
-        const { data, error } = await supabaseClient.from('saidas_estoque').select('*').eq('id', id).single();
+        const { data } = await supabaseClient.from('saidas_estoque').select('*').eq('id', id).single();
         if (data) {
             document.getElementById('produto').value = data.produto;
             document.getElementById('quantidade').value = data.quantidade;
@@ -204,57 +189,29 @@
             document.getElementById('destino').value = data.destino;
             document.getElementById('dataSaida').value = data.data_saida;
             document.getElementById('editId').value = data.id;
-            btnSubmit.innerText = "ATUALIZAR REGISTRO";
-            btnSubmit.classList.add('editando');
+            document.getElementById('btnSubmit').innerText = "ATUALIZAR DADOS";
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }
 
-    // Exportação WhatsApp
-    async function exportarZap() {
-        const { data } = await supabaseClient.from('saidas_estoque').select('*').order('data_saida', { ascending: false });
-        if(!data || !data.length) return alert("Sem dados para exportar.");
-        
-        let msg = "*RELATÓRIO DE MOVIMENTAÇÃO - AGRO PRO*\n";
-        msg += "Responsável: João Divino Barbosa\n\n";
-        data.slice(0, 10).forEach(i => {
-            msg += `📅 ${i.data_saida.split('-').reverse().join('/')}\n`;
-            msg += `📦 ${i.produto}: ${i.quantidade} ${i.unidade}\n`;
-            msg += `📍 ${i.origem} -> ${i.destino}\n`;
-            msg += `--------------------------\n`;
+    function exportarZap() {
+        let msg = "*RELATÓRIO AGRO PRO - JOÃO DIVINO BARBOSA*\n\n";
+        const linhas = Array.from(tabelaCorpo.rows);
+        linhas.forEach(linha => {
+            msg += `📅 ${linha.cells[0].innerText} | ${linha.cells[1].innerText.replace('\n', ' ')} | Qtd: ${linha.cells[2].innerText.replace('\n', ' ')}\n`;
         });
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
     }
 
-    // Exportação PDF
     async function exportarPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const { data } = await supabaseClient.from('saidas_estoque').select('*').order('data_saida', { ascending: false });
-        
-        doc.setFontSize(16);
-        doc.text("Relatório de Saídas - Agro na Palma da Mão", 14, 20);
-        doc.setFontSize(10);
-        doc.text("Emitido por: João Divino Barbosa", 14, 28);
-        
-        const rows = data.map(i => [
-            i.data_saida.split('-').reverse().join('/'), 
-            i.produto, 
-            i.quantidade + ' ' + i.unidade, 
-            i.origem + ' > ' + i.destino
-        ]);
-        
-        doc.autoTable({ 
-            head: [['Data', 'Produto', 'Qtd/Unid', 'Trajeto']], 
-            body: rows, 
-            startY: 35,
-            theme: 'striped',
-            headStyles: { fillColor: [46, 125, 50] }
-        });
-        
-        doc.save(`Relatorio_Agro_${new Date().getTime()}.pdf`);
+        const { data } = await supabaseClient.from('saidas_estoque').select('*');
+        doc.text("Relatorio Agro - João Divino Barbosa", 14, 20);
+        const rows = data.map(i => [i.data_saida, i.produto, i.quantidade, i.unidade, i.origem, i.destino]);
+        doc.autoTable({ head: [['Data', 'Produto', 'Qtd', 'Unid', 'Origem', 'Destino']], body: rows, startY: 30 });
+        doc.save('agro_supabase.pdf');
     }
 </script>
-
 </body>
 </html>
